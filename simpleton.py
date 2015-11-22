@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
-import asyncio, asyncssh, sys
+import logging, logging.config, logging.handlers
+import sys
+import asyncio, asyncssh
+from queue import Queue
 
-from simpleton import parser
+from simpleton import *
 
 # 10ms poll cycle
 YIELD_TIMEOUT=0.01
-
 # Max. 50 parallel sessions
 MAX_CONCURRENT=50
 
-_cmds = ['ls -la /etc/hosts', 'exit 127', 'whoami']
 _host_dict = {}
 
 def parse_hosts(path='/etc/hosts'):
     with open(path) as f:
         hosts = f.readlines()
     hosts = [line.strip().split() for line in hosts if not line.startswith('#') and line.strip()]
+    log.debug('Parsed %d entries from %s' % (len(hosts), path))
     return {line[0]: line[1:] for line in hosts}
 
 def ip2host(ip):
@@ -26,40 +28,47 @@ def ip2host(ip):
     except:
         return ip
 
-class MySSHClientSession(asyncssh.SSHClientSession):
+class SSHClientSession(asyncssh.SSHClientSession):
+    def __init__(self):
+        self.cmd  = None
+        self.fail = False
+
     def connection_made(self, chan):
-        self._start   = loop.time()
-        self._chan    = chan
+        #self._chan    = chan
         self.hostname = ip2host(chan.get_extra_info('peername')[0])
 
     def data_received(self, data, datatype):
-        print('[%s]~' % self.hostname, data, end='')
+        log.info('[%s] %s' % (self.hostname, data.strip()))
 
     def exit_status_received(self, status):
-        _end = loop.time()
         if status:
-            print('[%s]! Exit code %d, took %.03fms' % (self.hostname, status, (_end-self._start)*1000), file=sys.stderr)
-        else:
-            print('[%s]- Completed, took %.03fms' % (self.hostname, (_end-self._start)*1000))
+            self.fail = True
+            log.error('[%s] Exit code %d' % (self.hostname, status))
+        #else:
+        #    print('[%s]- Completed' % (self.hostname, (_end-self._start)*1000))
 
     def connection_lost(self, exc):
         if exc:
             print('[%s]? SSH session error: %s' % (self.hostname, str(exc)), file=sys.stderr)
 
 @asyncio.coroutine
-def run_client(host):
+def SSHClient(host, cmdlist):
     try:
         with (yield from asyncssh.connect(host, known_hosts=None)) as conn:
-            print('[%s]+ Connection initiated' % host)
-            for cmd in _cmds:
-                chan, session = yield from conn.create_session(MySSHClientSession, cmd)
-                print('[%s]* Executing command: %s' % (host, cmd))
+            log.debug('[%s] Connection initiated' % host)
+            for cmd in cmdlist:
+                chan, session = yield from conn.create_session(SSHClientSession, cmd)
+                log.warning('[%s] Executing command: %s' % (host, cmd))
+                session.cmd = cmd
                 yield from chan.wait_closed()
+                if session.fail:
+                    log.critical('[%s] Failure detected, breaking...' % host)
+                    break
     except (OSError, asyncssh.Error) as exc:
         print('[%s]? SSH connection failed: %s' % (host, str(exc)), file=sys.stderr)
 
 @asyncio.coroutine
-def manager(loop, queue):
+def SSHManager(loop, queue, cmdlist):
     tasks = []
     while True:
         while (len(tasks) > MAX_CONCURRENT) or (tasks and queue.empty()):
@@ -70,7 +79,7 @@ def manager(loop, queue):
     
         if not queue.empty():
             host = yield from queue.get()
-            tasks.append(asyncio.async(run_client(host)))
+            tasks.append(asyncio.async(SSHClient(host, cmdlist)))
         else:
             if not tasks:
                 break
@@ -79,14 +88,26 @@ def manager(loop, queue):
 
 if __name__ == '__main__':
 
-    _host_dict = parse_hosts()
+    args = parser.parse_args()
 
-    loop = asyncio.get_event_loop()
+    # Configure logging format
+    logging.config.dictConfig(SIMPLETON_LOGGING)
+    log = logging.getLogger("default")
 
+    _log_queue = Queue()
+    log_async  = logging.handlers.QueueHandler(_log_queue)
+    log_queue  = logging.handlers.QueueListener(_log_queue, *log.handlers)
+
+    log_queue.start()
+    log.handlers = [log_async,]
+
+    loop  = asyncio.get_event_loop()
     queue = asyncio.Queue()
-#    asyncio.async(manager(loop, queue))
 
-    for host in ['archt01', 'archt02', 'archt03', 'archt04', 'archt05']*100:
-        queue.put_nowait(host)
+    _host_dict = parse_hosts()
+    if args.hostmatch:
+        for ip in _host_dict:
+            for match in args.hostmatch:
+                [queue.put_nowait(hostname) for hostname in _host_dict[ip] if match in hostname]
 
-    loop.run_until_complete(manager(loop, queue))
+    loop.run_until_complete(SSHManager(loop, queue, args.cmdlist))

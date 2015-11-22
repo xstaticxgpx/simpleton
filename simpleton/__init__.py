@@ -9,7 +9,13 @@ As opposed to a forked or threaded model, I'm opting to try and use an asynchron
 
 import argparse
 
+from simpleton.logging import *
+
 VERSION='v0.1'
 
 # Setting up parameter parsing
 parser = argparse.ArgumentParser(description='Agentless host management using SSH protocol.')
+
+parser.add_argument(dest='cmdlist', metavar='cmd', nargs='*', help='Command(s) to execute on the remote hosts.')
+
+parser.add_argument('-H', '--host', dest='hostmatch', nargs='+', help='Complete or partial hostnames')
