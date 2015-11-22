@@ -17,8 +17,8 @@ SIMPLETON_LOGGING = {
     'formatters': {
         'console': {
             #'format': '%(levelname)s %(message)s',
-            'format': '%(asctime)s.%(msecs)03d %(levelname)s %(message)s',
-            'datefmt': '%s'
+            'format': '## %(asctime)s.%(msecs)03dZ %(levelname)s %(message)s',
+            'datefmt': '%Y-%m-%dT%H:%M:%S'
         },
     },
     'handlers': {

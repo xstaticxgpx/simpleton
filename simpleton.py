@@ -31,35 +31,37 @@ def ip2host(ip):
 class SSHClientSession(asyncssh.SSHClientSession):
     def __init__(self):
         self.cmd  = None
+        self.user = None
+        self.host = None
         self.fail = False
 
     def connection_made(self, chan):
         #self._chan    = chan
-        self.hostname = ip2host(chan.get_extra_info('peername')[0])
+        self.host = ip2host(chan.get_extra_info('peername')[0])
 
     def data_received(self, data, datatype):
-        log.info('[%s] %s' % (self.hostname, data.strip()))
+        log.info('[%s:%s] %s\ncat <<_EOF >>%s\n%s\n%s\n%s\n%s\n\n_EOF' % 
+                (self.host, self.user, self.cmd, self.host+'_'+self.user+'.out', self.cmd, '-'*80, data.strip(), '-'*80))
 
     def exit_status_received(self, status):
         if status:
+            log.error('[%s] Exit code %d' % (self.host, status))
             self.fail = True
-            log.error('[%s] Exit code %d' % (self.hostname, status))
-        #else:
-        #    print('[%s]- Completed' % (self.hostname, (_end-self._start)*1000))
 
     def connection_lost(self, exc):
         if exc:
-            print('[%s]? SSH session error: %s' % (self.hostname, str(exc)), file=sys.stderr)
+            print('[%s]? SSH session error: %s' % (self.host, str(exc)), file=sys.stderr)
 
 @asyncio.coroutine
 def SSHClient(host, cmdlist):
     try:
         with (yield from asyncssh.connect(host, known_hosts=None)) as conn:
-            log.debug('[%s] Connection initiated' % host)
+            username = conn.get_extra_info("username")
+            log.debug('[%s] Connection initiated as user %s' % (host, username))
             for cmd in cmdlist:
                 chan, session = yield from conn.create_session(SSHClientSession, cmd)
-                log.warning('[%s] Executing command: %s' % (host, cmd))
-                session.cmd = cmd
+                session.cmd  = cmd
+                session.user = username
                 yield from chan.wait_closed()
                 if session.fail:
                     log.critical('[%s] Failure detected, breaking...' % host)
