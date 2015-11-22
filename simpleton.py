@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 import asyncio, asyncssh, sys
 
+from simpleton import parser
+
 # 10ms poll cycle
 YIELD_TIMEOUT=0.01
 
-_cmds = ['pacman -Syy', 'exit 127', 'whoami']
+# Max. 50 parallel sessions
+MAX_CONCURRENT=50
+
+_cmds = ['ls -la /etc/hosts', 'exit 127', 'whoami']
 _host_dict = {}
 
 def parse_hosts(path='/etc/hosts'):
@@ -51,24 +56,37 @@ def run_client(host):
                 print('[%s]* Executing command: %s' % (host, cmd))
                 yield from chan.wait_closed()
     except (OSError, asyncssh.Error) as exc:
-        sys.exit('[%s]? SSH connection failed: %s' % (host, str(exc)), file=sys.stderr)
+        print('[%s]? SSH connection failed: %s' % (host, str(exc)), file=sys.stderr)
 
 @asyncio.coroutine
-def manager(tasks):
-    while tasks:
-        for task in tasks:
-            if task.done():
-                tasks.remove(task)
-            yield from asyncio.sleep(YIELD_TIMEOUT)
+def manager(loop, queue):
+    tasks = []
+    while True:
+        while (len(tasks) > MAX_CONCURRENT) or (tasks and queue.empty()):
+            for task in tasks:
+                if task.done():
+                    tasks.remove(task)
+                yield from asyncio.sleep(YIELD_TIMEOUT)
+    
+        if not queue.empty():
+            host = yield from queue.get()
+            tasks.append(asyncio.async(run_client(host)))
+        else:
+            if not tasks:
+                break
     loop.stop()
 
 
 if __name__ == '__main__':
+
     _host_dict = parse_hosts()
 
-    tasks = []
     loop = asyncio.get_event_loop()
-    for host in ['archt01', 'archt02', 'archt03', 'archt04', 'archt05']:
-        tasks.append(asyncio.async(run_client(host)))
-    asyncio.async(manager(tasks))
-    loop.run_forever()
+
+    queue = asyncio.Queue()
+#    asyncio.async(manager(loop, queue))
+
+    for host in ['archt01', 'archt02', 'archt03', 'archt04', 'archt05']*100:
+        queue.put_nowait(host)
+
+    loop.run_until_complete(manager(loop, queue))
