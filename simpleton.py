@@ -92,6 +92,10 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(1)
+
     # Configure logging format
     logging.config.dictConfig(SIMPLETON_LOGGING)
     log = logging.getLogger("default")
@@ -105,6 +109,10 @@ if __name__ == '__main__':
 
     loop  = asyncio.get_event_loop()
     queue = asyncio.Queue()
+
+    if args.cmdfile:
+        with open(args.cmdfile) as f:
+            args.cmdlist = f.readlines()
 
     _host_dict = parse_hosts()
     if args.hostmatch:
