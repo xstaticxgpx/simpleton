@@ -14,7 +14,7 @@ from simpleton.logging import *
 VERSION='v0.1'
 
 # Setting up parameter parsing
-parser = argparse.ArgumentParser(description='Agentless host management using SSH protocol.')
+parser = argparse.ArgumentParser(description='Simple agentless host management using the SSH protocol.')
 
 parser.add_argument(dest='cmdlist', metavar='cmd', nargs='*', help='Command(s) to execute on the remote hosts.')
 

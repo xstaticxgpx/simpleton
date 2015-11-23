@@ -4,20 +4,27 @@ import sys
 import asyncio, asyncssh
 from queue import Queue
 
+# raised when asyncio.wait_for timeout reached
+from concurrent.futures._base import TimeoutError
+
 from simpleton import *
 
 # 10ms poll cycle
 YIELD_TIMEOUT=0.01
 # Max. 50 parallel sessions
 MAX_CONCURRENT=50
+# Wait at most 5s to initiate connection
+CONNECT_TIMEOUT=5
 
 _host_dict = {}
 
 def parse_hosts(path='/etc/hosts'):
     with open(path) as f:
         hosts = f.readlines()
+    # Parse out comments and blank lines
     hosts = [line.strip().split() for line in hosts if not line.startswith('#') and line.strip()]
     log.debug('Parsed %d entries from %s' % (len(hosts), path))
+    # Return dictionary of ip: [hostnames,..]
     return {line[0]: line[1:] for line in hosts}
 
 def ip2host(ip):
@@ -50,12 +57,12 @@ class SSHClientSession(asyncssh.SSHClientSession):
 
     def connection_lost(self, exc):
         if exc:
-            print('[%s]? SSH session error: %s' % (self.host, str(exc)), file=sys.stderr)
+            log.error('[%s] SSH session error: %s' % (self.host, str(exc) if str(exc) else "Timeout"))
 
 @asyncio.coroutine
 def SSHClient(host, cmdlist):
     try:
-        with (yield from asyncssh.connect(host, known_hosts=None)) as conn:
+        with (yield from asyncio.wait_for(asyncssh.connect(host, known_hosts=None), CONNECT_TIMEOUT)) as conn:
             username = conn.get_extra_info("username")
             log.debug('[%s] Connection initiated as user %s' % (host, username))
             for cmd in cmdlist:
@@ -66,8 +73,8 @@ def SSHClient(host, cmdlist):
                 if session.fail:
                     log.critical('[%s] Failure detected, breaking...' % host)
                     break
-    except (OSError, asyncssh.Error) as exc:
-        print('[%s]? SSH connection failed: %s' % (host, str(exc)), file=sys.stderr)
+    except (OSError, asyncssh.Error, TimeoutError) as exc:
+        log.error('[%s] SSH connection failed: %s' % (host, str(exc) if str(exc) else "Timeout"))
 
 @asyncio.coroutine
 def SSHManager(loop, queue, cmdlist):
@@ -120,4 +127,9 @@ if __name__ == '__main__':
             for match in args.hostmatch:
                 [queue.put_nowait(hostname) for hostname in _host_dict[ip] if match in hostname]
 
+    _host_count = queue.qsize()
+    
+    _start = loop.time()
     loop.run_until_complete(SSHManager(loop, queue, args.cmdlist))
+    _end   = loop.time()
+    log.critical('Completed %d hosts in %.03fms' % (_host_count, (_end-_start)*1000))
