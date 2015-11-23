@@ -161,8 +161,8 @@ if __name__ == '__main__':
                 #for c in i:
                 [_hosts.append(hostname) for hostname in _host_dict[ip] if match in hostname]
     
+    _uniq = set(_hosts)
     if args.hostexclude:
-        _uniq = set(_hosts)
         for exclude in args.hostexclude:
             [_uniq.remove(hostname) for hostname in _hosts if exclude in hostname]
 
