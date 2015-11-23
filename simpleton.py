@@ -11,16 +11,16 @@ from simpleton import *
 
 ## Global configuration
 
-# 10ms poll cycle
-YIELD_TIMEOUT=0.01
-# Max. 50 parallel sessions
+# 100ms poll cycle (used in SSHManager)
+YIELD_TIMEOUT=0.1
+# Max. 50 concurrent sessions
 MAX_CONCURRENT=50
 # Wait at most 5s to initiate connection
 CONNECT_TIMEOUT=5
 
 ## Definitions
 _host_dict = {}
-output_delim = '-'*80
+_delimiter = '-'*80
 connectfailures = []
 sessionfailures = []
 
@@ -55,9 +55,9 @@ class SSHClientSession(asyncssh.SSHClientSession):
         self.host = ip2host(chan.get_extra_info('peername')[0])
 
     def data_received(self, data, datatype):
-        global output_delim
-        log.info('[%s:%s] %s\ncat <<_EOF >>%s\n%s\n%s\n%s\n%s\n_EOF' % 
-                (self.host, self.user, self.cmd, self.host+'_'+self.user+'.out', self.cmd, output_delim, data.strip(), output_delim))
+        global _delimiter
+        log.info('[%s:%s] %s\ncat <<_EOF >>%s\n# %s\n%s\n%s\n%s\n_EOF' % 
+                (self.host, self.user, self.cmd, self.host+'_'+self.user+'.out', self.cmd, _delimiter, data.strip(), _delimiter))
 
 
     def exit_status_received(self, status):
@@ -101,7 +101,7 @@ def SSHManager(loop, queue, cmdlist):
             for task in tasks:
                 if task.done():
                     tasks.remove(task)
-                yield from asyncio.sleep(YIELD_TIMEOUT)
+            yield from asyncio.sleep(YIELD_TIMEOUT)
     
         if not queue.empty():
             host = yield from queue.get()
@@ -139,18 +139,31 @@ if __name__ == '__main__':
             args.cmdlist = f.readlines()
 
     _host_dict = parse_hosts(args.hostsfile)
+    _hosts = []
     if args.hostmatch:
         for ip in _host_dict:
             for match in args.hostmatch:
                 #i = 'i'*10
                 #for c in i:
-                [queue.put_nowait(hostname) for hostname in _host_dict[ip] if match in hostname]
-
-    _host_count = queue.qsize()
+                [_hosts.append(hostname) for hostname in _host_dict[ip] if match in hostname]
     
+    if args.hostexclude:
+        _uniq = set(_hosts)
+        for exclude in args.hostexclude:
+            [_uniq.remove(hostname) for hostname in _hosts if exclude in hostname]
+
+    if not _uniq:
+        log.critical('No hosts matched')
+        log_queue.stop()
+        sys.exit(1)
+
     try:
+        [queue.put_nowait(hostname) for hostname in _uniq]
+        _host_count = queue.qsize()
+
         _start = loop.time()
         loop.run_until_complete(SSHManager(loop, queue, args.cmdlist))
+
     finally:
         _end   = loop.time()
         log.critical('Connected to %d hosts successfully, %d hosts failed: %s' % (_host_count-len(connectfailures), len(connectfailures), ' '.join(sorted(connectfailures))))
