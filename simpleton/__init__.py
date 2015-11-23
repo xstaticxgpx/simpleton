@@ -18,6 +18,11 @@ parser = argparse.ArgumentParser(description='Simple agentless host management u
 
 parser.add_argument(dest='cmdlist', metavar='cmd', nargs='*', help='Command(s) to execute on the remote hosts.')
 
-parser.add_argument('-H', '--host', dest='hostmatch', metavar='host', nargs='+', help='Complete or partial hostnames')
+parser.add_argument('--hostsfile', dest='hostsfile', metavar='path', nargs='?', default='/etc/hosts',
+        help='Path to hosts file (default: /etc/hosts)')
 
-parser.add_argument('-f', '--file', dest='cmdfile', metavar='path', nargs='?', help='(Optional) Command list file')
+parser.add_argument('-H', '--host', dest='hostmatch', metavar='host', nargs='+',
+        help='Complete or partial hostnames')
+
+parser.add_argument('-f', '--file', dest='cmdfile', metavar='path', nargs='?',
+        help='(Optional) Command list file')

@@ -21,10 +21,10 @@ CONNECT_TIMEOUT=5
 ## Definitions
 _host_dict = {}
 output_delim = '-'*80
-connectfailures = 0
-sessionfailures = 0
+connectfailures = []
+sessionfailures = []
 
-def parse_hosts(path='/etc/hosts'):
+def parse_hosts(path):
     with open(path) as f:
         hosts = f.readlines()
     # Parse out comments and blank lines
@@ -43,7 +43,6 @@ def ip2host(ip):
 
 class SSHClientSession(asyncssh.SSHClientSession):
 
-
     def __init__(self):
         self.user = "null"
         self.cmd  = "null"
@@ -57,7 +56,7 @@ class SSHClientSession(asyncssh.SSHClientSession):
 
     def data_received(self, data, datatype):
         global output_delim
-        log.info('[%s:%s] %s\ncat <<_EOF >>%s\n%s\n%s\n%s\n%s\n\n_EOF' % 
+        log.info('[%s:%s] %s\ncat <<_EOF >>%s\n%s\n%s\n%s\n%s\n_EOF' % 
                 (self.host, self.user, self.cmd, self.host+'_'+self.user+'.out', self.cmd, output_delim, data.strip(), output_delim))
 
 
@@ -87,14 +86,15 @@ def SSHClient(host, cmdlist):
                 yield from chan.wait_closed()
                 if session.fail:
                     log.critical('[%s:%s] Failure detected, breaking...' % (host, conn._usr))
-                    sessionfailures+=1
+                    sessionfailures.append(host)
                     break
     except (OSError, asyncssh.Error, TimeoutError) as exc:
         log.error('[%s] SSH connection failed: %s' % (host, str(exc) if str(exc) else "Timeout"))
-        connectfailures+=1
+        connectfailures.append(host)
 
 @asyncio.coroutine
 def SSHManager(loop, queue, cmdlist):
+
     tasks = []
     while True:
         while (len(tasks) > MAX_CONCURRENT) or (tasks and queue.empty()):
@@ -138,7 +138,7 @@ if __name__ == '__main__':
         with open(args.cmdfile) as f:
             args.cmdlist = f.readlines()
 
-    _host_dict = parse_hosts()
+    _host_dict = parse_hosts(args.hostsfile)
     if args.hostmatch:
         for ip in _host_dict:
             for match in args.hostmatch:
@@ -148,8 +148,12 @@ if __name__ == '__main__':
 
     _host_count = queue.qsize()
     
-    _start = loop.time()
-    loop.run_until_complete(SSHManager(loop, queue, args.cmdlist))
-    _end   = loop.time()
-    log.critical('Finished run in %.03fms' % ((_end-_start)*1000))
-    log.critical('Connected to %d hosts successfully, %d hosts failed' % (_host_count-connectfailures, connectfailures))
+    try:
+        _start = loop.time()
+        loop.run_until_complete(SSHManager(loop, queue, args.cmdlist))
+    finally:
+        _end   = loop.time()
+        log.critical('Connected to %d hosts successfully, %d hosts failed: %s' % (_host_count-len(connectfailures), len(connectfailures), ' '.join(sorted(connectfailures))))
+        log.critical('Failed commands on %d hosts: %s' % (len(sessionfailures), ' '.join(sorted(sessionfailures))))
+        log.critical('Finished run in %.03fms' % ((_end-_start)*1000))
+        log_queue.stop()
