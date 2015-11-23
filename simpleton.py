@@ -9,6 +9,8 @@ from concurrent.futures._base import TimeoutError
 
 from simpleton import *
 
+## Global configuration
+
 # 10ms poll cycle
 YIELD_TIMEOUT=0.01
 # Max. 50 parallel sessions
@@ -16,7 +18,11 @@ MAX_CONCURRENT=50
 # Wait at most 5s to initiate connection
 CONNECT_TIMEOUT=5
 
+## Definitions
 _host_dict = {}
+output_delim = '-'*80
+connectfailures = 0
+sessionfailures = 0
 
 def parse_hosts(path='/etc/hosts'):
     with open(path) as f:
@@ -36,45 +42,56 @@ def ip2host(ip):
         return ip
 
 class SSHClientSession(asyncssh.SSHClientSession):
+
+
     def __init__(self):
-        self.cmd  = None
-        self.user = None
+        self.user = "null"
+        self.cmd  = "null"
         self.host = None
         self.fail = False
 
     def connection_made(self, chan):
-        #self._chan    = chan
+        self.user = chan.get_extra_info('connection')._usr
+        self.cmd  = chan.get_extra_info('connection')._cmd
         self.host = ip2host(chan.get_extra_info('peername')[0])
 
     def data_received(self, data, datatype):
+        global output_delim
         log.info('[%s:%s] %s\ncat <<_EOF >>%s\n%s\n%s\n%s\n%s\n\n_EOF' % 
-                (self.host, self.user, self.cmd, self.host+'_'+self.user+'.out', self.cmd, '-'*80, data.strip(), '-'*80))
+                (self.host, self.user, self.cmd, self.host+'_'+self.user+'.out', self.cmd, output_delim, data.strip(), output_delim))
+
 
     def exit_status_received(self, status):
         if status:
-            log.error('[%s] Exit code %d' % (self.host, status))
             self.fail = True
+            log.error('[%s:%s] %s -> error code %d' % (self.host, self.user, self.cmd, status))
 
     def connection_lost(self, exc):
         if exc:
-            log.error('[%s] SSH session error: %s' % (self.host, str(exc) if str(exc) else "Timeout"))
+            self.fail = True
+            log.error('[%s:%s] SSH session error: %s' % (self.host, self.user, str(exc) if str(exc) else "Timeout"))
 
 @asyncio.coroutine
 def SSHClient(host, cmdlist):
+
+    global connectfailures
+    global sessionfailures
+
     try:
         with (yield from asyncio.wait_for(asyncssh.connect(host, known_hosts=None), CONNECT_TIMEOUT)) as conn:
-            username = conn.get_extra_info("username")
-            log.debug('[%s] Connection initiated as user %s' % (host, username))
+            conn._usr = conn.get_extra_info("username")
+            log.debug('[%s] Connection initiated as user %s' % (host, conn._usr))
             for cmd in cmdlist:
+                conn._cmd = cmd
                 chan, session = yield from conn.create_session(SSHClientSession, cmd)
-                session.cmd  = cmd
-                session.user = username
                 yield from chan.wait_closed()
                 if session.fail:
-                    log.critical('[%s] Failure detected, breaking...' % host)
+                    log.critical('[%s:%s] Failure detected, breaking...' % (host, conn._usr))
+                    sessionfailures+=1
                     break
     except (OSError, asyncssh.Error, TimeoutError) as exc:
         log.error('[%s] SSH connection failed: %s' % (host, str(exc) if str(exc) else "Timeout"))
+        connectfailures+=1
 
 @asyncio.coroutine
 def SSHManager(loop, queue, cmdlist):
@@ -125,6 +142,8 @@ if __name__ == '__main__':
     if args.hostmatch:
         for ip in _host_dict:
             for match in args.hostmatch:
+                #i = 'i'*10
+                #for c in i:
                 [queue.put_nowait(hostname) for hostname in _host_dict[ip] if match in hostname]
 
     _host_count = queue.qsize()
@@ -132,4 +151,5 @@ if __name__ == '__main__':
     _start = loop.time()
     loop.run_until_complete(SSHManager(loop, queue, args.cmdlist))
     _end   = loop.time()
-    log.critical('Completed %d hosts in %.03fms' % (_host_count, (_end-_start)*1000))
+    log.critical('Finished run in %.03fms' % ((_end-_start)*1000))
+    log.critical('Connected to %d hosts successfully, %d hosts failed' % (_host_count-connectfailures, connectfailures))
