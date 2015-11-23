@@ -43,11 +43,14 @@ def ip2host(ip):
 
 class SSHClientSession(asyncssh.SSHClientSession):
 
+    global output
+
     def __init__(self):
         self.user = "null"
         self.cmd  = "null"
         self.host = None
         self.fail = False
+        self.first = True
 
     def connection_made(self, chan):
         self.user = chan.get_extra_info('connection')._usr
@@ -56,8 +59,17 @@ class SSHClientSession(asyncssh.SSHClientSession):
 
     def data_received(self, data, datatype):
         global _delimiter
-        log.info('[%s:%s] %s\ncat <<_EOF >>%s\n# %s\n%s\n%s\n%s\n_EOF' % 
-                (self.host, self.user, self.cmd, self.host+'_'+self.user+'.out', self.cmd, _delimiter, data.strip(), _delimiter))
+        if self.first:
+            print('cat <<_EOF >>%s\n\n# %s\n%s\n%s\n_EOF\n' % 
+                 (self.host+'_'+self.user+'.out', self.cmd, _delimiter, data.strip()), file=output)
+            log.info('[%s:%s] %s\n%s' % 
+                    (self.host, self.user, self.cmd, data.strip()))
+            self.first = False
+        else:
+            print('cat <<_EOF >>%s\n%s\n_EOF' % 
+                 (self.host+'_'+self.user+'.out', data.strip()), file=output)
+            log.info('[%s:%s] %s\n%s' % 
+                    (self.host, self.user, self.cmd, data.strip()))
 
 
     def exit_status_received(self, status):
@@ -79,7 +91,7 @@ def SSHClient(host, cmdlist):
     try:
         with (yield from asyncio.wait_for(asyncssh.connect(host, known_hosts=None), CONNECT_TIMEOUT)) as conn:
             conn._usr = conn.get_extra_info("username")
-            log.debug('[%s] Connection initiated as user %s' % (host, conn._usr))
+            log.debug('[%s:%s] Connection initiated' % (host, conn._usr))
             for cmd in cmdlist:
                 conn._cmd = cmd
                 chan, session = yield from conn.create_session(SSHClientSession, cmd)
@@ -119,6 +131,8 @@ if __name__ == '__main__':
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(1)
+
+    output = open(args.output, 'w')
 
     # Configure logging format
     logging.config.dictConfig(SIMPLETON_LOGGING)

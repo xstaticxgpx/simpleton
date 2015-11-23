@@ -31,3 +31,6 @@ parser.add_argument('-X', '--exclude', dest='hostexclude', metavar='host', nargs
 
 parser.add_argument('-f', '--file', dest='cmdfile', metavar='path', nargs='?',
         help='(Optional) Command list file')
+
+parser.add_argument('-o', '--output', dest='output', metavar='path', nargs='?', default='./simpleton_last',
+        help='Path to save output script (default: ./simpleton_last)')
