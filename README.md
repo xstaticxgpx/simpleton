@@ -85,6 +85,6 @@ archt04: root
 #+# [2015-11-24T06:09:53.519Z] archt04 command failed: [ "$HOSTNAME" == "archt05" ] && exit 127 (exit code: 1)
 #+# [2015-11-24T06:09:53.520Z] archt05 command failed: [ "$HOSTNAME" == "archt05" ] && exit 127 (exit code: 127)
 #!# [2015-11-24T06:09:53.520Z] archt06 connection failed: Timeout
-#?# [2015-11-24T06:09:53.520Z] --------------------------------------------------------------------------------
+#?# [2015-11-24T06:09:53.520Z] ----------------------------------------
 #~# [2015-11-24T06:09:53.520Z] Saved output script to ./simpleton_last
 ```
