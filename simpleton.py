@@ -100,7 +100,7 @@ def SSHClient(host, cmdlist):
     try:
         with (yield from asyncio.wait_for(asyncssh.connect(host, known_hosts=None), CONNECT_TIMEOUT)) as conn:
             conn._usr = conn.get_extra_info("username")
-            log.debug('[%s:%s] Connection initiated' % (host, conn._usr))
+            log.warning('[%s:%s] Connection initiated' % (host, conn._usr))
             for cmd in cmdlist:
                 conn._cmd = cmd
                 chan, session = yield from conn.create_session(SSHClientSession, cmd)
@@ -191,13 +191,13 @@ if __name__ == '__main__':
     finally:
         _end   = loop.time()
         #log.critical('Completed %d hosts, failed %d hosts: %s %s' % (_host_count-len(connectfailures), len(connectfailures), ' '.join(sorted(connectfailures)), ' '.join(sorted(sessionfailures))))
-        log.debug(_delimiter)
+        log.debug(_delimiter[:40])
         log.critical('Finished run in %.03fms' % ((_end-_start)*1000))
         for host in sorted(_uniq):
             if host in sessionfailures:
                 log.warning('%s command failed: %s (exit code: %d)' % (host, sessionfailures[host][_CMD], sessionfailures[host][_EXITCODE]))
             elif host in connectfailures:
                 log.critical('%s connection failed: %s' % (host, connectfailures[host]))
-        log.debug(_delimiter)
+        log.debug(_delimiter[:40])
         log.info('Saved output script to %s' % args.output)
         log_queue.stop()
