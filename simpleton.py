@@ -50,6 +50,15 @@ def ip2host(ip):
     except:
         return ip
 
+def sanitize(s):
+    ESCAPE = [
+            '`'
+    ]
+    for char in ESCAPE:
+        if char in s:
+            s = s.replace(char, '\\'+char)
+    return s
+
 class SSHClientSession(asyncssh.SSHClientSession):
 
     global output
@@ -70,7 +79,7 @@ class SSHClientSession(asyncssh.SSHClientSession):
         global _delimiter
         if self.first:
             print('cat <<_EOF >>%s\n\n# %s\n%s\n%s\n_EOF\n' % 
-                 (self.host+'_'+self.user+'.out', self.cmd, _delimiter, data.strip()), file=output)
+                 (self.host+'_'+self.user+'.out', sanitize(self.cmd), _delimiter, data.strip()), file=output)
             log.info('[%s:%s] %s\n%s' % 
                     (self.host, self.user, self.cmd, data.strip()))
             self.first = False
