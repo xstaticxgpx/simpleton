@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+https://github.com/xstaticxgpx/simpleton
+"""
+
 import logging, logging.config, logging.handlers
 import sys
 import asyncio, asyncssh
@@ -15,14 +19,19 @@ from simpleton import *
 YIELD_TIMEOUT=0.1
 # Max. 50 concurrent sessions
 MAX_CONCURRENT=50
-# Wait at most 5s to initiate connection
-CONNECT_TIMEOUT=5
+# Wait max. 10s for connection
+CONNECT_TIMEOUT=10
 
 ## Definitions
 _host_dict = {}
 _delimiter = '-'*80
-connectfailures = []
-sessionfailures = []
+connectfailures = {}
+sessionfailures = {}
+
+## Static variables
+# pointers for sessionfailures list values
+_CMD = 0
+_EXITCODE = 1
 
 def parse_hosts(path):
     with open(path) as f:
@@ -74,7 +83,7 @@ class SSHClientSession(asyncssh.SSHClientSession):
 
     def exit_status_received(self, status):
         if status:
-            self.fail = True
+            self.fail = status
             log.error('[%s:%s] %s -> error code %d' % (self.host, self.user, self.cmd, status))
 
     def connection_lost(self, exc):
@@ -98,11 +107,12 @@ def SSHClient(host, cmdlist):
                 yield from chan.wait_closed()
                 if session.fail:
                     log.critical('[%s:%s] Failure detected, breaking...' % (host, conn._usr))
-                    sessionfailures.append(host)
+                    sessionfailures[host] = [cmd, session.fail]
                     break
     except (OSError, asyncssh.Error, TimeoutError) as exc:
-        log.error('[%s] SSH connection failed: %s' % (host, str(exc) if str(exc) else "Timeout"))
-        connectfailures.append(host)
+        exc = str(exc) if str(exc) else "Timeout"
+        log.error('[%s] SSH connection failed: %s' % (host, exc))
+        connectfailures[host] = exc
 
 @asyncio.coroutine
 def SSHManager(loop, queue, cmdlist):
@@ -180,7 +190,14 @@ if __name__ == '__main__':
 
     finally:
         _end   = loop.time()
-        log.critical('Connected to %d hosts successfully, %d hosts failed: %s' % (_host_count-len(connectfailures), len(connectfailures), ' '.join(sorted(connectfailures))))
-        log.critical('Failed commands on %d hosts: %s' % (len(sessionfailures), ' '.join(sorted(sessionfailures))))
+        #log.critical('Completed %d hosts, failed %d hosts: %s %s' % (_host_count-len(connectfailures), len(connectfailures), ' '.join(sorted(connectfailures)), ' '.join(sorted(sessionfailures))))
+        log.debug(_delimiter)
         log.critical('Finished run in %.03fms' % ((_end-_start)*1000))
+        for host in sorted(_uniq):
+            if host in sessionfailures:
+                log.warning('%s command failed: %s (exit code: %d)' % (host, sessionfailures[host][_CMD], sessionfailures[host][_EXITCODE]))
+            elif host in connectfailures:
+                log.critical('%s connection failed: %s' % (host, connectfailures[host]))
+        log.debug(_delimiter)
+        log.info('Saved output script to %s' % args.output)
         log_queue.stop()
