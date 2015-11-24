@@ -6,11 +6,11 @@ import logging, time
 logging.Formatter.converter = time.gmtime
 
 logging._levelToName = {
-    logging.CRITICAL: '!',
-    logging.ERROR:    '*',
-    logging.WARNING:  '+',
-    logging.INFO:     '~',
-    logging.DEBUG:    '?',
+    logging.CRITICAL: '#!#',
+    logging.ERROR:    '#*#',
+    logging.WARNING:  '#+#',
+    logging.INFO:     '#~#',
+    logging.DEBUG:    '#?#',
 }
 
 SIMPLETON_LOGGING = {
@@ -19,7 +19,7 @@ SIMPLETON_LOGGING = {
     'formatters': {
         'console': {
             #'format': '%(levelname)s %(message)s',
-            'format': '#%(levelname)s# [%(asctime)s.%(msecs)03dZ] %(message)s',
+            'format': '%(levelname)s [%(asctime)s.%(msecs)03dZ] %(message)s',
             'datefmt': '%Y-%m-%dT%H:%M:%S',
         },
     },
