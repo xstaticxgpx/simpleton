@@ -15,6 +15,30 @@ CONNECT_TIMEOUT=10
 
 # Usage
 
+```
+$ ./simpleton.py --help
+usage: simpleton.py [-h] [--hostsfile [path]] [-H host [host ...]]
+                    [-X host [host ...]] [-f [path]] [-o [path]]
+                    [cmd [cmd ...]]
+
+Simple agentless host management using the SSH protocol.
+
+positional arguments:
+  cmd                   Command(s) to execute on the remote hosts.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --hostsfile [path]    Path to hosts file (default: /etc/hosts)
+  -H host [host ...], --host host [host ...]
+                        Complete or partial hostnames
+  -X host [host ...], --exclude host [host ...]
+                        Exclude complete or partial hostnames
+  -f [path], --file [path]
+                        (Optional) Command list file
+  -o [path], --output [path]
+                        Path to save output script (default: ./simpleton_last)
+```
+
 On the remote host(s), configure SSH authorized_keys with the public key for the management host:
 
 ```
