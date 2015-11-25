@@ -147,10 +147,9 @@ def SSHClient(host, cmdlist):
                         sessionfailures[host] = [cmd, session.error]
                         break
 
-    except (OSError, asyncssh.Error, AIOTimeout) as e:
-        e = repr(e)
-        log.error('[%s] SSH connection failed: %s', host, e)
-        connectfailures[host] = e
+    except (OSError, asyncssh.Error, AIOTimeout) as exc:
+        log.error('[%s] SSH connection failed: %s', host, repr(exc))
+        connectfailures[host] = repr(exc)
 
 
 @asyncio.coroutine
