@@ -28,7 +28,7 @@ parser.add_argument('-X', '--exclude', dest='hostexclude', metavar='host', nargs
         help='Exclude complete or partial hostnames')
 
 parser.add_argument('-f', '--file', dest='cmdfile', metavar='path', nargs='?',
-        help='(Optional) Command list file')
+        help='Command list file')
 
-parser.add_argument('-o', '--output', dest='output', metavar='path', nargs='?', default='./simpleton_last',
-        help='Path to save output script (default: ./simpleton_last)')
+parser.add_argument('-o', '--output', dest='output', metavar='path', nargs='?', default='./out.sh',
+        help='Path to save output script (default: ./out.sh) Automatically overwritten.')
