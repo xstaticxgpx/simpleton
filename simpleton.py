@@ -3,15 +3,24 @@
 https://github.com/xstaticxgpx/simpleton
 """
 
-import logging, logging.config, logging.handlers
-import sys
 import asyncio, asyncssh
+import sys
 from queue import Queue
 
 # raised when asyncio.wait_for timeout reached
 from concurrent.futures._base import TimeoutError
 
-from simpleton import *
+from logconfig import *
+from argparser import *
+
+## Definition and static variables
+_delimiter = '-'
+_hosts_dict = {}
+connectfailures = {}
+sessionfailures = {}
+# pointers for sessionfailures list values
+_CMD = 0
+_EXITCODE = 1
 
 ## Global configuration
 
@@ -21,17 +30,6 @@ YIELD_TIMEOUT=0.1
 MAX_CONCURRENT=50
 # Wait max. 10s for connection
 CONNECT_TIMEOUT=10
-
-## Definitions
-_host_dict = {}
-_delimiter = '-'*80
-connectfailures = {}
-sessionfailures = {}
-
-## Static variables
-# pointers for sessionfailures list values
-_CMD = 0
-_EXITCODE = 1
 
 def parse_hosts(path):
     with open(path) as f:
@@ -43,10 +41,10 @@ def parse_hosts(path):
     return {line[0]: line[1:] for line in hosts}
 
 def ip2host(ip):
-    global _host_dict
+    global _hosts_dict
 
     try:
-        return _host_dict[ip][0]
+        return _hosts_dict[ip][0]
     except:
         return ip
 
@@ -79,7 +77,7 @@ class SSHClientSession(asyncssh.SSHClientSession):
         global _delimiter
         if self.first:
             print('cat <<_EOF >>%s\n\n# %s\n%s\n%s\n_EOF\n' % 
-                 (self.host+'_'+self.user+'.out', sanitize(self.cmd), _delimiter, data.strip()), file=output)
+                 (self.host+'_'+self.user+'.out', sanitize(self.cmd), _delimiter*80, data.strip()), file=output)
             log.info('[%s:%s] %s\n%s' % 
                     (self.host, self.user, self.cmd, data.strip()))
             self.first = False
@@ -171,27 +169,28 @@ if __name__ == '__main__':
         with open(args.cmdfile) as f:
             args.cmdlist = f.readlines()
 
-    _host_dict = parse_hosts(args.hostsfile)
-    _hosts = []
+    _hosts_dict = parse_hosts(args.hostsfile)
+    _hosts = set()
     if args.hostmatch:
-        for ip in _host_dict:
+        for ip in _hosts_dict:
             for match in args.hostmatch:
                 #i = 'i'*10
                 #for c in i:
-                [_hosts.append(hostname) for hostname in _host_dict[ip] if match in hostname]
+                [_hosts.add(hostname) for hostname in _hosts_dict[ip] if match in hostname]
     
-    _uniq = set(_hosts)
+    __hosts = list(_hosts)
     if args.hostexclude:
         for exclude in args.hostexclude:
-            [_uniq.remove(hostname) for hostname in _hosts if exclude in hostname]
+            [_hosts.remove(hostname) for hostname in __hosts if exclude in hostname]
+    del __hosts
 
-    if not _uniq:
+    if not _hosts:
         log.critical('No hosts matched')
         log_queue.stop()
         sys.exit(1)
 
     try:
-        [queue.put_nowait(hostname) for hostname in _uniq]
+        [queue.put_nowait(hostname) for hostname in _hosts]
         _host_count = queue.qsize()
 
         _start = loop.time()
@@ -200,13 +199,13 @@ if __name__ == '__main__':
     finally:
         _end   = loop.time()
         #log.critical('Completed %d hosts, failed %d hosts: %s %s' % (_host_count-len(connectfailures), len(connectfailures), ' '.join(sorted(connectfailures)), ' '.join(sorted(sessionfailures))))
-        log.debug(_delimiter[:40])
+        log.debug(_delimiter*40)
         log.critical('Finished run in %.03fms' % ((_end-_start)*1000))
-        for host in sorted(_uniq):
+        for host in sorted(_hosts):
             if host in sessionfailures:
                 log.warning('%s command failed: %s (exit code: %d)' % (host, sessionfailures[host][_CMD], sessionfailures[host][_EXITCODE]))
             elif host in connectfailures:
                 log.critical('%s connection failed: %s' % (host, connectfailures[host]))
-        log.debug(_delimiter[:40])
+        log.debug(_delimiter*40)
         log.info('Saved output script to %s' % args.output)
         log_queue.stop()

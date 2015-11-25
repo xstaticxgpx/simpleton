@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 ## Standard modules
-import logging, time
+import logging, logging.config, logging.handlers
+import time
 
 logging.Formatter.converter = time.gmtime
 
