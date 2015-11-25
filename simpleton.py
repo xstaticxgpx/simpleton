@@ -201,11 +201,14 @@ if __name__ == '__main__':
         #log.critical('Completed %d hosts, failed %d hosts: %s %s' % (_host_count-len(connectfailures), len(connectfailures), ' '.join(sorted(connectfailures)), ' '.join(sorted(sessionfailures))))
         log.debug(_delimiter*40)
         log.critical('Finished run in %.03fms' % ((_end-_start)*1000))
-        for host in sorted(_hosts):
-            if host in sessionfailures:
-                log.warning('%s command failed: %s (exit code: %d)' % (host, sessionfailures[host][_CMD], sessionfailures[host][_EXITCODE]))
-            elif host in connectfailures:
-                log.critical('%s connection failed: %s' % (host, connectfailures[host]))
+        if sessionfailures or connectfailures:
+            for host in sorted(_hosts):
+                if host in sessionfailures:
+                    log.warning('%s command failed: %s (exit code: %d)' % (host, sessionfailures[host][_CMD], sessionfailures[host][_EXITCODE]))
+                elif host in connectfailures:
+                    log.critical('%s connection failed: %s' % (host, connectfailures[host]))
+        else:
+            log.info('No errors reported.')
         log.debug(_delimiter*40)
         log.info('Saved output script to %s' % args.output)
         log_queue.stop()
