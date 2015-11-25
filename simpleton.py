@@ -135,7 +135,7 @@ def SSHClient(host, cmdlist):
                 conn.cmd = cmd.strip()
                 try:
                     chan, session = yield from conn.create_session(SSHClientSession, conn.cmd)
-                    yield from asyncio.wait_for(chan.wait_closed(), SESSION_TIMEOUT)
+                    yield from wait_for(chan.wait_closed(), SESSION_TIMEOUT)
 
                 except AIOTimeout:
                     session.error = "Timeout"
