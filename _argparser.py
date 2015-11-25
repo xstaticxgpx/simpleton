@@ -1,15 +1,6 @@
 #!/usr/bin/env python3
-"""
-Simpleton's goal is to provide an extremely simple alternative to host/configuration management.
-
-This is accomplished by using the SSH protocol for an agentless design.
-
-As opposed to a fork or thread model, I'm opting to try and use an asynchronous, event oriented implementation using `asyncssh`
-"""
 
 import argparse
-
-VERSION='v0.1'
 
 # Setting up parameter parsing
 parser = argparse.ArgumentParser(description="""

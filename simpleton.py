@@ -5,13 +5,14 @@ https://github.com/xstaticxgpx/simpleton
 
 import asyncio, asyncssh
 import sys
-from queue import Queue
+
+from asyncio import wait_for
 
 # raised when asyncio.wait_for timeout reached
-from concurrent.futures._base import TimeoutError
+from concurrent.futures._base import TimeoutError as AIOTimeout
 
-from _logconfig import *
-from _argparser import *
+from _logconfig import log, log_queue
+from _argparser import parser
 
 ## Definition and static variables
 _delimiter = '-'
@@ -26,48 +27,51 @@ _ESCAPE = [
     '`',
     '$',
 ]
+# SSH connection options
+_SSH_OPTS = {
+    'known_hosts': None,
+}
 
 ## Global configuration
 
 # 100ms poll cycle (used in SSHManager)
-YIELD_TIMEOUT=0.1
+YIELD_TIMEOUT = 0.1
 # Max. 50 concurrent sessions
-MAX_CONCURRENT=50
+MAX_CONCURRENT = 50
 # Wait max. 10s for connection
-CONNECT_TIMEOUT=10
+CONNECT_TIMEOUT = 10
 # Max 5min session time
-SESSION_TIMEOUT=300
+SESSION_TIMEOUT = 300
+
 
 def parse_hosts(path):
     """
-    Read lines from path and parse legit entries with split()
+    Read lines from path and parse entries with split()
     """
-    with open(path) as f:
-        hosts = f.readlines()
+    with open(path) as hostsfile:
+        hosts = hostsfile.readlines()
 
     # Parse out comments and blank lines, split on whitespace
     hosts = [line.strip().split() for line in hosts if not line.startswith('#') and line.strip()]
-    log.debug('Parsed %d entries from %s' % (len(hosts), path))
+    log.debug('Parsed %d entries from %s', len(hosts), path)
 
     # Return dictionary of ip: [hostnames,..]
     return {line[0]: line[1:] for line in hosts}
 
-def ip2host(ip):
+def ip2host(peername):
     """
     Host dictionary lookup
     """
-    global _hosts_dict
 
     try:
-        return _hosts_dict[ip][0]
-    except:
-        return ip
+        return _hosts_dict[peername][0]
+    except (KeyError, IndexError):
+        return peername
 
 def sanitize(s):
     """
     Backslash escape characters
     """
-    global _ESCAPE
 
     for char in _ESCAPE:
         if char in s:
@@ -75,33 +79,40 @@ def sanitize(s):
     return s
 
 class SSHClientSession(asyncssh.SSHClientSession):
-    global output
-    global _delimiter
 
     def __init__(self):
-        self.user  = "null"
-        self.cmd   = "null"
-        self.host  = None
-        self.first = True
         self.error = False
 
+        self._first = True
+        self._host = None
+        self._usr = "null"
+        self._cmd = "null"
+        self._file = None
+
     def connection_made(self, chan):
-        self.host = ip2host(chan.get_extra_info('peername')[0])
-        self.user = chan.get_extra_info('connection')._usr
-        self.cmd  = chan.get_extra_info('connection')._cmd
+        self._host = ip2host(chan.get_extra_info('peername')[0])
+        self._usr = chan.get_extra_info('connection').usr
+        self._cmd = chan.get_extra_info('connection').cmd
+        self._file = '%s_%s.out' % (self._host, self._usr)
 
     def data_received(self, data, datatype):
-        if self.first:
-            print('cat <<_EOF >>%s\n# %s\n%s\n%s\n_EOF\n' % 
-                 (self.host+'_'+self.user+'.out', sanitize(self.cmd), _delimiter*80, data), file=output)
-            log.info('[%s:%s] %s\n%s' % 
-                    (self.host, self.user, self.cmd, data))
-            self.first = False
+        if self._first:
+
+            print('cat <<_EOF >>%s\n%s\n%s\n%s\n_EOF\n' %
+                  (self._file,
+                   "# "+sanitize(self._cmd),
+                   _delimiter*80,
+                   data), file=output)
+
+            log.info('[%s:%s] %s\n%s', self._host, self._usr, self._cmd, data)
+            self._first = False
+
         else:
-            print('cat <<_EOF >>%s\n%s\n_EOF' % 
-                 (self.host+'_'+self.user+'.out', data.strip()), file=output)
-            log.info('[%s:%s] %s\n%s' % 
-                    (self.host, self.user, self.cmd, data))
+
+            print('cat <<_EOF >>%s\n%s\n_EOF' % (self._file, data.strip()),
+                  file=output)
+
+            log.info('[%s:%s] %s\n%s', self._host, self._usr, self._cmd, data)
 
 
     def exit_status_received(self, status):
@@ -113,41 +124,37 @@ class SSHClientSession(asyncssh.SSHClientSession):
             self.error = str(e) if str(e) else "Timeout"
 
 @asyncio.coroutine
-def SSHClient(loop, host, cmdlist):
-    global connectfailures
-    global sessionfailures
+def SSHClient(host, cmdlist):
 
     try:
-        with (yield from asyncio.wait_for(asyncssh.connect(host, known_hosts=None), CONNECT_TIMEOUT)) as conn:
-            conn._usr = conn.get_extra_info("username")
-            log.warning('[%s:%s] SSH connection initiated' % (host, conn._usr))
+        with (yield from wait_for(asyncssh.connect(host, **_SSH_OPTS), CONNECT_TIMEOUT)) as conn:
+            conn.usr = conn.get_extra_info("username")
+            log.warning('[%s:%s] SSH connection initiated', host, conn.usr)
 
             for cmd in cmdlist:
-                conn._cmd = cmd.strip()
+                conn.cmd = cmd.strip()
                 try:
-                    chan, session = yield from conn.create_session(SSHClientSession, conn._cmd)
+                    chan, session = yield from conn.create_session(SSHClientSession, conn.cmd)
                     yield from asyncio.wait_for(chan.wait_closed(), SESSION_TIMEOUT)
 
-                except TimeoutError:
+                except AIOTimeout:
                     session.error = "Timeout"
 
                 finally:
                     if session.error:
-                        log.critical('[%s:%s] %s (%s)' % (host, conn._usr, conn._cmd, session.error))
-                        log.critical('[%s:%s] Failure detected, breaking...' % (host, conn._usr))
+                        log.critical('[%s:%s] %s (%s)', host, conn.usr, conn.cmd, session.error)
+                        log.critical('[%s:%s] Failure detected, breaking...', host, conn.usr)
                         sessionfailures[host] = [cmd, session.error]
                         break
 
-    except (OSError, asyncssh.Error, TimeoutError) as e:
+    except (OSError, asyncssh.Error, AIOTimeout) as e:
         e = repr(e)
-        log.error('[%s] SSH connection failed: %s' % (host, e))
+        log.error('[%s] SSH connection failed: %s', host, e)
         connectfailures[host] = e
 
 
 @asyncio.coroutine
 def SSHManager(loop, queue, cmdlist):
-    global MAX_CONCURRENT
-    global YIELD_TIMEOUT
 
     tasks = []
     while True:
@@ -156,10 +163,10 @@ def SSHManager(loop, queue, cmdlist):
                 if task.done():
                     tasks.remove(task)
             yield from asyncio.sleep(YIELD_TIMEOUT)
-    
+
         if not queue.empty():
             host = yield from queue.get()
-            tasks.append(asyncio.async(SSHClient(loop, host, cmdlist)))
+            tasks.append(asyncio.async(SSHClient(host, cmdlist)))
         else:
             if not tasks:
                 break
@@ -173,27 +180,16 @@ if __name__ == '__main__':
         parser.print_help()
         sys.exit(1)
 
-    # Configure logging
-    logging.config.dictConfig(SIMPLETON_LOGGING)
-    log = logging.getLogger("default")
-
-    # Startup logging thread
-    _log_queue = Queue()
-    log_async  = logging.handlers.QueueHandler(_log_queue)
-    log_queue  = logging.handlers.QueueListener(_log_queue, *log.handlers)
-
-    log_queue.start()
-    log.handlers = [log_async,]
 
     # Bootstrap asyncio objects
-    loop  = asyncio.get_event_loop()
     queue = asyncio.Queue()
+    loop = asyncio.get_event_loop()
 
     # Load commands from file if specified
     # overwrites commands specified on CLI
     if args.cmdfile:
-        with open(args.cmdfile) as f:
-            args.cmdlist = f.readlines()
+        with open(args.cmdfile) as cmdfile:
+            args.cmdlist = cmdfile.readlines()
 
     # Host matching logic
     _hosts_dict = parse_hosts(args.hostsfile)
@@ -202,7 +198,7 @@ if __name__ == '__main__':
         for ip in _hosts_dict:
             for match in args.hostmatch:
                 [_hosts.add(hostname) for hostname in _hosts_dict[ip] if match in hostname]
-    
+
     # Host exclusion logic
     __hosts = list(_hosts)
     if args.hostexclude:
@@ -228,20 +224,23 @@ if __name__ == '__main__':
         loop.run_until_complete(SSHManager(loop, queue, args.cmdlist))
 
     finally:
-        _end   = loop.time()
+        _end = loop.time()
 
         log.debug(_delimiter*40)
-        log.info('Finished run in %.03fms' % ((_end-_start)*1000))
+        log.info('Finished run in %.03fms', (_end-_start)*1000)
+
         if sessionfailures or connectfailures:
             for host in sorted(_hosts):
                 if host in sessionfailures:
-                    log.warning('%s command failed: %s (%s)' % (host, sessionfailures[host][_CMD], sessionfailures[host][_STATUS]))
+                    log.warning('%s command failed: %s (%s)',
+                                host, sessionfailures[host][_CMD], sessionfailures[host][_STATUS])
+
                 elif host in connectfailures:
-                    log.warning('%s connection failed: %s' % (host, connectfailures[host]))
+                    log.warning('%s connection failed: %s', host, connectfailures[host])
         else:
             log.info('No errors reported.')
-        log.debug(_delimiter*40)
 
-        log.info('Saved output script to %s' % args.output)
+        log.debug(_delimiter*40)
+        log.info('Saved output script to %s', args.output)
         output.close()
         log_queue.stop()
