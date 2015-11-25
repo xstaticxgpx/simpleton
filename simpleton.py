@@ -35,8 +35,8 @@ YIELD_TIMEOUT=0.1
 MAX_CONCURRENT=50
 # Wait max. 10s for connection
 CONNECT_TIMEOUT=10
-# Max 1min session time
-SESSION_TIMEOUT=5
+# Max 5min session time
+SESSION_TIMEOUT=300
 
 def parse_hosts(path):
     """
