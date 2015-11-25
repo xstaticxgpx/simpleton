@@ -10,8 +10,8 @@ from queue import Queue
 # raised when asyncio.wait_for timeout reached
 from concurrent.futures._base import TimeoutError
 
-from logconfig import *
-from argparser import *
+from _logconfig import *
+from _argparser import *
 
 ## Definition and static variables
 _delimiter = '-'
