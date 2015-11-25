@@ -107,12 +107,10 @@ class SSHClientSession(asyncssh.SSHClientSession):
     def exit_status_received(self, status):
         if status:
             self.error = "exit code %d" % status
-#            log.error('[%s:%s] %s (%s)' % (self.host, self.user, self.cmd, self.error))
 
-    def connection_lost(self, exc):
-        if exc:
-            self.error = str(exc) if str(exc) else "Timeout"
-#            log.error('[%s:%s] SSH session error: %s' % (self.host, self.user, self.error))
+    def connection_lost(self, e):
+        if e:
+            self.error = str(e) if str(e) else "Timeout"
 
 @asyncio.coroutine
 def SSHClient(loop, host, cmdlist):
@@ -123,13 +121,16 @@ def SSHClient(loop, host, cmdlist):
         with (yield from asyncio.wait_for(asyncssh.connect(host, known_hosts=None), CONNECT_TIMEOUT)) as conn:
             conn._usr = conn.get_extra_info("username")
             log.warning('[%s:%s] SSH connection initiated' % (host, conn._usr))
+
             for cmd in cmdlist:
                 conn._cmd = cmd.strip()
                 try:
                     chan, session = yield from conn.create_session(SSHClientSession, conn._cmd)
                     yield from asyncio.wait_for(chan.wait_closed(), SESSION_TIMEOUT)
+
                 except TimeoutError:
                     session.error = "Timeout"
+
                 finally:
                     if session.error:
                         log.critical('[%s:%s] %s (%s)' % (host, conn._usr, conn._cmd, session.error))
@@ -137,11 +138,11 @@ def SSHClient(loop, host, cmdlist):
                         sessionfailures[host] = [cmd, session.error]
                         break
 
+    except (OSError, asyncssh.Error, TimeoutError) as e:
+        e = repr(e)
+        log.error('[%s] SSH connection failed: %s' % (host, e))
+        connectfailures[host] = e
 
-    except (OSError, asyncssh.Error, TimeoutError) as exc:
-        exc = str(exc) if str(exc) else "Timeout"
-        log.error('[%s] SSH connection failed: %s' % (host, exc))
-        connectfailures[host] = exc
 
 @asyncio.coroutine
 def SSHManager(loop, queue, cmdlist):
@@ -172,10 +173,7 @@ if __name__ == '__main__':
         parser.print_help()
         sys.exit(1)
 
-    # Open output script for writing
-    output = open(args.output, 'w')
-
-    # Configure logging format
+    # Configure logging
     logging.config.dictConfig(SIMPLETON_LOGGING)
     log = logging.getLogger("default")
 
@@ -191,10 +189,13 @@ if __name__ == '__main__':
     loop  = asyncio.get_event_loop()
     queue = asyncio.Queue()
 
+    # Load commands from file if specified
+    # overwrites commands specified on CLI
     if args.cmdfile:
         with open(args.cmdfile) as f:
             args.cmdlist = f.readlines()
 
+    # Host matching logic
     _hosts_dict = parse_hosts(args.hostsfile)
     _hosts = set()
     if args.hostmatch:
@@ -202,7 +203,7 @@ if __name__ == '__main__':
             for match in args.hostmatch:
                 [_hosts.add(hostname) for hostname in _hosts_dict[ip] if match in hostname]
     
-    # Exclusion logic
+    # Host exclusion logic
     __hosts = list(_hosts)
     if args.hostexclude:
         for exclude in args.hostexclude:
@@ -214,15 +215,21 @@ if __name__ == '__main__':
         log_queue.stop()
         sys.exit(1)
 
+    # Place matched hosts into queue
     [queue.put_nowait(hostname) for hostname in _hosts]
     _host_count = queue.qsize()
 
     try:
+        # Open output script for writing
+        output = open(args.output, 'w')
+
         _start = loop.time()
+        # Begin asynchronous loop execution
         loop.run_until_complete(SSHManager(loop, queue, args.cmdlist))
 
     finally:
         _end   = loop.time()
+
         log.debug(_delimiter*40)
         log.info('Finished run in %.03fms' % ((_end-_start)*1000))
         if sessionfailures or connectfailures:
@@ -234,6 +241,7 @@ if __name__ == '__main__':
         else:
             log.info('No errors reported.')
         log.debug(_delimiter*40)
+
         log.info('Saved output script to %s' % args.output)
         output.close()
         log_queue.stop()
