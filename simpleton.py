@@ -6,9 +6,9 @@ https://github.com/xstaticxgpx/simpleton
 import asyncio, asyncssh
 import sys
 
-from asyncio import wait_for
+from asyncio import wait_for as aiowait
 
-# raised when asyncio.wait_for timeout reached
+# raised when asyncio.wait_for/aiowait timeout reached
 from concurrent.futures._base import TimeoutError as AIOTimeout
 
 from _logconfig import log, log_queue
@@ -36,11 +36,11 @@ _SSH_OPTS = {
 
 # 100ms poll cycle (used in SSHManager)
 YIELD_TIMEOUT = 0.1
-# Max. 50 concurrent sessions
+# 50 concurrent sessions
 MAX_CONCURRENT = 50
-# Wait max. 10s for connection
+# Wait max. 10s for connection stand up
 CONNECT_TIMEOUT = 10
-# Max 5min session time
+# 5min session timeout (no input received)
 SESSION_TIMEOUT = 300
 
 
@@ -79,6 +79,10 @@ def sanitize(s):
     return s
 
 class SSHClientSession(asyncssh.SSHClientSession):
+    """
+    Inherits asyncssh.SSHClientSession
+    https://asyncssh.readthedocs.org/en/stable/api.html#sshclientsession
+    """
 
     def __init__(self):
         self.error = False
@@ -119,15 +123,18 @@ class SSHClientSession(asyncssh.SSHClientSession):
         if status:
             self.error = "exit code %d" % status
 
-    def connection_lost(self, e):
-        if e:
-            self.error = str(e) if str(e) else "Timeout"
+    def connection_lost(self, exc):
+        if exc:
+            self.error = str(exc) if str(exc) else "Timeout"
 
 @asyncio.coroutine
 def SSHClient(host, cmdlist):
+    """
+    Perform SSH client logic
+    """
 
     try:
-        with (yield from wait_for(asyncssh.connect(host, **_SSH_OPTS), CONNECT_TIMEOUT)) as conn:
+        with (yield from aiowait(asyncssh.connect(host, **_SSH_OPTS), CONNECT_TIMEOUT)) as conn:
             conn.usr = conn.get_extra_info("username")
             log.warning('[%s:%s] SSH connection initiated', host, conn.usr)
 
@@ -135,7 +142,7 @@ def SSHClient(host, cmdlist):
                 conn.cmd = cmd.strip()
                 try:
                     chan, session = yield from conn.create_session(SSHClientSession, conn.cmd)
-                    yield from wait_for(chan.wait_closed(), SESSION_TIMEOUT)
+                    yield from aiowait(chan.wait_closed(), SESSION_TIMEOUT)
 
                 except AIOTimeout:
                     session.error = "Timeout"
@@ -144,8 +151,8 @@ def SSHClient(host, cmdlist):
                     if session.error:
                         log.critical('[%s:%s] %s (%s)', host, conn.usr, conn.cmd, session.error)
                         log.critical('[%s:%s] Failure detected, breaking...', host, conn.usr)
-                        sessionfailures[host] = [cmd, session.error]
-                        break
+                        sessionfailures[host] = (cmd, session.error)
+                        break # pylint: disable=lost-exception
 
     except (OSError, asyncssh.Error, AIOTimeout) as exc:
         log.error('[%s] SSH connection failed: %s', host, repr(exc))
@@ -153,19 +160,21 @@ def SSHClient(host, cmdlist):
 
 
 @asyncio.coroutine
-def SSHManager(loop, queue, cmdlist):
+def SSHManager(host_queue, cmdlist):
+    """
+    Parallel SSHClient
+    """
 
     tasks = []
     while True:
-        while (len(tasks) > MAX_CONCURRENT) or (tasks and queue.empty()):
+        while (len(tasks) > MAX_CONCURRENT) or (tasks and host_queue.empty()):
             for task in tasks:
                 if task.done():
                     tasks.remove(task)
             yield from asyncio.sleep(YIELD_TIMEOUT)
 
-        if not queue.empty():
-            host = yield from queue.get()
-            tasks.append(asyncio.async(SSHClient(host, cmdlist)))
+        if not host_queue.empty():
+            tasks.append(asyncio.async(SSHClient((yield from host_queue.get()), cmdlist)))
         else:
             if not tasks:
                 break
@@ -181,7 +190,7 @@ if __name__ == '__main__':
 
 
     # Bootstrap asyncio objects
-    queue = asyncio.Queue()
+    _host_queue = asyncio.Queue()
     loop = asyncio.get_event_loop()
 
     # Load commands from file if specified
@@ -196,14 +205,13 @@ if __name__ == '__main__':
     if args.hostmatch:
         for ip in _hosts_dict:
             for match in args.hostmatch:
-                [_hosts.add(hostname) for hostname in _hosts_dict[ip] if match in hostname]
+                [_hosts.add(hostname) for hostname in _hosts_dict[ip] if match in hostname] # pylint: disable=expression-not-assigned
 
     # Host exclusion logic
     __hosts = list(_hosts)
     if args.hostexclude:
         for exclude in args.hostexclude:
-            [_hosts.remove(hostname) for hostname in __hosts if exclude in hostname]
-    del __hosts
+            [_hosts.remove(hostname) for hostname in __hosts if exclude in hostname] # pylint: disable=expression-not-assigned
 
     if not _hosts:
         log.critical('No hosts matched')
@@ -211,8 +219,8 @@ if __name__ == '__main__':
         sys.exit(1)
 
     # Place matched hosts into queue
-    [queue.put_nowait(hostname) for hostname in _hosts]
-    _host_count = queue.qsize()
+    [_host_queue.put_nowait(hostname) for hostname in _hosts] # pylint: disable=expression-not-assigned
+    _host_count = _host_queue.qsize()
 
     try:
         # Open output script for writing
@@ -220,7 +228,7 @@ if __name__ == '__main__':
 
         _start = loop.time()
         # Begin asynchronous loop execution
-        loop.run_until_complete(SSHManager(loop, queue, args.cmdlist))
+        loop.run_until_complete(SSHManager(_host_queue, args.cmdlist))
 
     finally:
         _end = loop.time()
@@ -229,13 +237,14 @@ if __name__ == '__main__':
         log.info('Finished run in %.03fms', (_end-_start)*1000)
 
         if sessionfailures or connectfailures:
-            for host in sorted(_hosts):
-                if host in sessionfailures:
+            for _host in sorted(_hosts):
+                if _host in sessionfailures:
                     log.warning('%s command failed: %s (%s)',
-                                host, sessionfailures[host][_CMD], sessionfailures[host][_STATUS])
+                                _host,
+                                sessionfailures[_host][_CMD], sessionfailures[_host][_STATUS])
 
-                elif host in connectfailures:
-                    log.warning('%s connection failed: %s', host, connectfailures[host])
+                elif _host in connectfailures:
+                    log.warning('%s connection failed: %s', _host, connectfailures[_host])
         else:
             log.info('No errors reported.')
 
