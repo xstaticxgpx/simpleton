@@ -219,6 +219,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     # Place matched hosts into queue
+    #for _ in range(200):
     [_host_queue.put_nowait(hostname) for hostname in _hosts] # pylint: disable=expression-not-assigned
     _host_count = _host_queue.qsize()
 
@@ -234,9 +235,13 @@ if __name__ == '__main__':
         _end = loop.time()
 
         log.debug(_delimiter*40)
-        log.info('Finished run in %.03fms', (_end-_start)*1000)
+        _fail_count = len(connectfailures)+len(sessionfailures)
+        log.info('Successfully ran on %d hosts in %.03fs', (_host_count-_fail_count), (_end-_start))
+        if _fail_count:
+            log.warn('Failed on %d hosts:', _fail_count)
 
         if sessionfailures or connectfailures:
+            # Only report unique failures (_hosts set)
             for _host in sorted(_hosts):
                 if _host in sessionfailures:
                     log.warning('%s command failed: %s (%s)',
