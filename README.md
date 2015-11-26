@@ -1,7 +1,9 @@
 # simpleton
 Simple agentless host management using the SSH protocol.
 
-Designed with asynchronous SSH calls implemented via [asyncssh](https://github.com/ronf/asyncssh)
+Built for python3.4, does not implement [PEP-492](https://www.python.org/dev/peps/pep-0492/)
+
+Utilizes [asyncio](https://docs.python.org/3.4/library/asyncio.html) for event driven concurrency, with SSH capability implemented via [asyncssh](https://github.com/ronf/asyncssh)
 
 # Configuration
 ```
