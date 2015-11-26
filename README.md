@@ -42,6 +42,8 @@ optional arguments:
                         Automatically overwritten.
 ```
 
+# Quick start
+
 On the remote host(s), configure SSH authorized_keys with the public key for the management host:
 
 ```
@@ -53,44 +55,44 @@ And execute simpleton from the management host:
 
 ```
 mgmt-host$ sudo ./simpleton.py -H archt -- 'echo `hostname`: `whoami`' '[ $HOSTNAME == "archt05" ] && exit 0'
-#?# [2015-11-25T22:32:37.518Z] Parsed 11 entries from /etc/hosts
-#+# [2015-11-25T22:32:37.826Z] [archt05:root] SSH connection initiated
-#+# [2015-11-25T22:32:37.828Z] [archt02:root] SSH connection initiated
-#+# [2015-11-25T22:32:37.829Z] [archt01:root] SSH connection initiated
-#+# [2015-11-25T22:32:37.877Z] [archt03:root] SSH connection initiated
-#+# [2015-11-25T22:32:37.878Z] [archt04:root] SSH connection initiated
-#~# [2015-11-25T22:32:38.183Z] [archt01:root] echo `hostname`: `whoami`
-archt01: root
-
-#~# [2015-11-25T22:32:38.185Z] [archt05:root] echo `hostname`: `whoami`
-archt05: root
-
-#~# [2015-11-25T22:32:38.185Z] [archt02:root] echo `hostname`: `whoami`
-archt02: root
-
-#~# [2015-11-25T22:32:38.196Z] [archt03:root] echo `hostname`: `whoami`
+#?# [2015-11-26T04:37:45.933Z] Parsed 11 entries from /etc/hosts
+#+# [2015-11-26T04:37:46.120Z] [archt04:root] SSH connection initiated
+#+# [2015-11-26T04:37:46.121Z] [archt03:root] SSH connection initiated
+#+# [2015-11-26T04:37:46.122Z] [archt02:root] SSH connection initiated
+#+# [2015-11-26T04:37:46.124Z] [archt01:root] SSH connection initiated
+#+# [2015-11-26T04:37:46.130Z] [archt05:root] SSH connection initiated
+#~# [2015-11-26T04:37:46.370Z] [archt03:root] echo `hostname`: `whoami`
 archt03: root
 
-#!# [2015-11-25T22:32:38.265Z] [archt01:root] [ $HOSTNAME == "archt05" ] && exit 0 (exit code 1)
-#!# [2015-11-25T22:32:38.265Z] [archt01:root] Failure detected, breaking...
-#!# [2015-11-25T22:32:38.270Z] [archt02:root] [ $HOSTNAME == "archt05" ] && exit 0 (exit code 1)
-#!# [2015-11-25T22:32:38.270Z] [archt02:root] Failure detected, breaking...
-#!# [2015-11-25T22:32:38.297Z] [archt03:root] [ $HOSTNAME == "archt05" ] && exit 0 (exit code 1)
-#!# [2015-11-25T22:32:38.297Z] [archt03:root] Failure detected, breaking...
-#~# [2015-11-25T22:32:38.559Z] [archt04:root] echo `hostname`: `whoami`
+#~# [2015-11-26T04:37:46.370Z] [archt01:root] echo `hostname`: `whoami`
+archt01: root
+
+#~# [2015-11-26T04:37:46.371Z] [archt05:root] echo `hostname`: `whoami`
+archt05: root
+
+#~# [2015-11-26T04:37:46.372Z] [archt02:root] echo `hostname`: `whoami`
+archt02: root
+
+#~# [2015-11-26T04:37:46.429Z] [archt04:root] echo `hostname`: `whoami`
 archt04: root
 
-#!# [2015-11-25T22:32:38.642Z] [archt04:root] [ $HOSTNAME == "archt05" ] && exit 0 (exit code 1)
-#!# [2015-11-25T22:32:38.642Z] [archt04:root] Failure detected, breaking...
-#*# [2015-11-25T22:32:47.519Z] [archt06] SSH connection failed: TimeoutError()
-#?# [2015-11-25T22:32:47.650Z] ----------------------------------------
-#~# [2015-11-25T22:32:47.650Z] Finished run in 10131.914ms
-#+# [2015-11-25T22:32:47.650Z] archt01 command failed: [ $HOSTNAME == "archt05" ] && exit 0 (exit code 1)
-#+# [2015-11-25T22:32:47.650Z] archt02 command failed: [ $HOSTNAME == "archt05" ] && exit 0 (exit code 1)
-#+# [2015-11-25T22:32:47.650Z] archt03 command failed: [ $HOSTNAME == "archt05" ] && exit 0 (exit code 1)
-#+# [2015-11-25T22:32:47.650Z] archt04 command failed: [ $HOSTNAME == "archt05" ] && exit 0 (exit code 1)
-#+# [2015-11-25T22:32:47.650Z] archt06 connection failed: TimeoutError()
-#?# [2015-11-25T22:32:47.650Z] ----------------------------------------
-#~# [2015-11-25T22:32:47.650Z] Saved output script to ./out.sh
+#!# [2015-11-26T04:37:46.452Z] [archt03:root] [ $HOSTNAME == "archt05" ] && exit 0 (exit code 1)
+#!# [2015-11-26T04:37:46.453Z] [archt03:root] Failure detected, breaking...
+#!# [2015-11-26T04:37:46.454Z] [archt01:root] [ $HOSTNAME == "archt05" ] && exit 0 (exit code 1)
+#!# [2015-11-26T04:37:46.454Z] [archt01:root] Failure detected, breaking...
+#!# [2015-11-26T04:37:46.455Z] [archt02:root] [ $HOSTNAME == "archt05" ] && exit 0 (exit code 1)
+#!# [2015-11-26T04:37:46.455Z] [archt02:root] Failure detected, breaking...
+#!# [2015-11-26T04:37:46.511Z] [archt04:root] [ $HOSTNAME == "archt05" ] && exit 0 (exit code 1)
+#!# [2015-11-26T04:37:46.511Z] [archt04:root] Failure detected, breaking...
+#*# [2015-11-26T04:37:55.934Z] [archt06] SSH connection failed: TimeoutError()
+#?# [2015-11-26T04:37:56.065Z] ----------------------------------------
+#~# [2015-11-26T04:37:56.065Z] Finished run in 10132.020ms
+#+# [2015-11-26T04:37:56.066Z] archt01 command failed: [ $HOSTNAME == "archt05" ] && exit 0 (exit code 1)
+#+# [2015-11-26T04:37:56.066Z] archt02 command failed: [ $HOSTNAME == "archt05" ] && exit 0 (exit code 1)
+#+# [2015-11-26T04:37:56.066Z] archt03 command failed: [ $HOSTNAME == "archt05" ] && exit 0 (exit code 1)
+#+# [2015-11-26T04:37:56.066Z] archt04 command failed: [ $HOSTNAME == "archt05" ] && exit 0 (exit code 1)
+#+# [2015-11-26T04:37:56.066Z] archt06 connection failed: TimeoutError()
+#?# [2015-11-26T04:37:56.066Z] ----------------------------------------
+#~# [2015-11-26T04:37:56.066Z] Saved output script to ./out.sh
 ```
 
