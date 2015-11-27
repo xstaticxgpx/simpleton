@@ -236,7 +236,7 @@ if __name__ == '__main__':
         _fail_count = len(connectfailures)+len(sessionfailures)
         log.info('Successfully ran on %d hosts in %.03fs', (_host_count-_fail_count), (_end-_start))
         if _fail_count:
-            log.warn('Failed on %d hosts:', _fail_count)
+            log.warn('Failures on %d hosts:', _fail_count)
 
         if sessionfailures or connectfailures:
             # Only report unique failures (_hosts set)
