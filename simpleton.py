@@ -34,10 +34,8 @@ _SSH_OPTS = {
 
 ## Global configuration
 
-# 100ms poll cycle (used in SSHManager)
-YIELD_TIMEOUT = 0.1
-# 50 concurrent sessions
-MAX_CONCURRENT = 50
+# 96 concurrent sessions max.
+MAX_CONCURRENT = 96
 # Wait max. 10s for connection stand up
 CONNECT_TIMEOUT = 10
 # 5min session timeout (no input received)
@@ -168,10 +166,8 @@ def SSHManager(host_queue, cmdlist):
     tasks = []
     while True:
         while (len(tasks) > MAX_CONCURRENT) or (tasks and host_queue.empty()):
-            for task in tasks:
-                if task.done():
-                    tasks.remove(task)
-            yield from asyncio.sleep(YIELD_TIMEOUT)
+            done, pending = yield from asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED) # pylint: disable=unused-variable
+            [tasks.remove(task) for task in done] # pylint: disable=expression-not-assigned
 
         if not host_queue.empty():
             tasks.append(asyncio.async(SSHClient((yield from host_queue.get()), cmdlist)))
