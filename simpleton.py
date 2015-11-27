@@ -213,6 +213,8 @@ if __name__ == '__main__':
         log.critical('No hosts matched')
         log_queue.stop()
         sys.exit(1)
+    log.debug('Matched %d hosts like %s, unlike %s',
+              len(_hosts), args.hostmatch, args.hostexclude if args.hostexclude else "''")
 
     # Place matched hosts into queue
     #for _ in range(200):
