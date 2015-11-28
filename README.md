@@ -22,12 +22,12 @@ SESSION_TIMEOUT = 300
 # Usage
 
 ```
-$ ./simpleton.py --help
+$ ./simpleton.py 
 usage: simpleton.py [-h] [--hostsfile [path]] [-H host [host ...]]
                     [-X host [host ...]] [-f [path]] [-o [path]]
                     [cmd [cmd ...]]
 
-Simple agentless host management using the SSH protocol.
+Simple asynchronous host management using SSH
 
 positional arguments:
   cmd                   Command(s) to execute on the remote hosts.
@@ -55,7 +55,7 @@ remote-host# cat /root/.ssh/authorized_keys
 no-pty,from="mgmt-host,10.0.0.1" ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDJk0StZE0eVXSRUR/M/5FHzhEv3CHft5pFhQrhokpsNJWXCLF2tXyZtgXtxPcGqUCr+ZEuwaQef8QyBWzazBdJARFZ/5wkdimYpUTV5xb2uK+99CnDEOBjmLNpX6CjbPt7CxClWzoKQMlnNw9JciUYkAPjYuijXUNFZBV2WTj3mbZ7ns71j/w7Uru2nxA4qH50ygq9rENVWj75h27CF2zjujQKTsUdR2MID+JHUPtIc5l7s+PTlcgFurfkzGPaNZ0hUqLljxdxKBYNuwEix9M0gfcnJCdVQ8FbNWwhEme5U2by0/umL6jr6Ef7pP2RUHN29WFnvPANxEdwOnLBz2LRObXi8L5NJ4I30zuj/fq/CDYbSeyID21OnrpP5VomBsbhKMoceRjgjMi3NwVLzldYdT6TGvJFkN5tvvljoN2P1278VrlJmvFiMgIGCcAcmXXLT9cNvevuS3f6OnwGowS93kTs4GgaOil8YI5iRTcUlNAHAeH1bY43sf1Ra+mV/Bn2ByULWsCbLCkzKVrDDu48L3KloN6O23N/hGETWaDYMXAanetxtiTeUYklaPRS217rOm+EjgbEAL/UVE2jFWenWLOU2TSdHVHN969fsLDIXqivcvk/LgezXGf/cVU7PFFwjeXU32n4CAt1Z5Zk/AKdLRrM0sRZM/kLr8zCV9mj/w== root@mgmt-host
 ```
 
-Define hosts in /etc/hosts on the management host, then run simpleton:
+Define host(s) in /etc/hosts on the management host, then run simpleton:
 
 ```
 mgmt-host$ sudo ./simpleton.py -H remote-host -- 'echo `hostname`: `whoami`' 'ps aux'
