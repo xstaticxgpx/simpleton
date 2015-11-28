@@ -4,7 +4,7 @@ import argparse
 
 # Setting up parameter parsing
 parser = argparse.ArgumentParser(description="""
-Simple agentless host management using the SSH protocol.
+Simple asynchronous host management using SSH
 """)
 
 parser.add_argument(dest='cmdlist', metavar='cmd', nargs='*', help='Command(s) to execute on the remote hosts.')
