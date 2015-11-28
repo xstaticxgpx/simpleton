@@ -1,6 +1,6 @@
 # simpleton
 
-Simple agentless host management using the SSH protocol.
+Simple asynchronous host management using SSH
 
 Built for python3.4, does not implement [PEP-492](https://www.python.org/dev/peps/pep-0492/)
 
