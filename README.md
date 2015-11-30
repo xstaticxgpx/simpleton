@@ -58,12 +58,15 @@ no-pty,from="mgmt-host,10.0.0.1" ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDJk0StZE0
 Define host(s) in /etc/hosts on the management host, then run simpleton:
 
 ```
+mgmt-host$ cat /etc/hosts | grep remote-host
+10.0.0.2 remote-host
+
 mgmt-host$ sudo ./simpleton.py -H remote-host -- 'echo `hostname`: `whoami`' 'ps aux'
 #?# [2015-11-28T06:17:29.546Z] Parsed 10 entries from /etc/hosts
 #?# [2015-11-28T06:17:29.546Z] Matched 1 hosts like ['remote-host'], unlike ''
 #+# [2015-11-28T06:17:29.722Z] [remote-host:root] SSH connection initiated
 #~# [2015-11-28T06:17:29.843Z] [remote-host:root] echo `hostname`: `whoami`
-archt01: root
+remote-host: root
 
 #~# [2015-11-28T06:17:29.926Z] [remote-host:root] ps aux
 USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
