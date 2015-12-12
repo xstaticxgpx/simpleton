@@ -159,8 +159,9 @@ def SSHClient(host_tuple, cmdlist):
                 conn.cmd = cmd.strip()
                 try:
                     # Initiate command execution
-                    chan, session = yield from conn.create_session(SSHClientSession, conn.cmd)
+                    session = SSHClientSession
                     # Wait at most SESSION_TIMEOUT seconds for session to complete
+                    chan, session = yield from wait_for(conn.create_session(session, conn.cmd), SESSION_TIMEOUT)
                     yield from wait_for(chan.wait_closed(), SESSION_TIMEOUT)
 
                 except AIOTimeout:
@@ -270,20 +271,24 @@ if __name__ == '__main__':
         _end = loop.time()
 
         log.debug(_delimiter*40)
-        _fail_count = len(connectfailures)+len(sessionfailures)
+
+        _fail_count = 0
+        for _host_tuple in _hosts:
+            _host = _host_tuple[0]
+            if _host in sessionfailures or _host in connectfailures:
+                _fail_count+=1
         log.info('Successfully ran on %d hosts in %.03fs', (_host_count-_fail_count), (_end-_start))
-        if _fail_count:
-            log.warn('Failures on %d hosts:', _fail_count)
 
         if sessionfailures or connectfailures:
             # Only report unique failures (_hosts set iterable)
-            for _host in sorted(_hosts):
+            for _host_tuple in sorted(_hosts):
+                _host = _host_tuple[0]
                 if _host in sessionfailures:
                     log.warning('%s command failed: %s (%s)',
                                 _host,
                                 sessionfailures[_host][_CMD], sessionfailures[_host][_STATUS])
 
-                elif _host in connectfailures:
+                if _host in connectfailures:
                     log.warning('%s connection failed: %s', _host, connectfailures[_host])
         else:
             log.info('No errors reported.')
