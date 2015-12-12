@@ -7,7 +7,7 @@ import asyncio, asyncssh
 import sys
 
 
-# raised when asyncio.wait_for/aiowait timeout reached
+# raised when asyncio.wait_for timeout reached
 from concurrent.futures._base import TimeoutError as AIOTimeout
 
 from _logconfig import log, log_queue
@@ -35,8 +35,8 @@ _SSH_OPTS = {
 
 # 96 concurrent sessions max.
 MAX_CONCURRENT = 96
-# Wait max. 10s for connection stand up
-CONNECT_TIMEOUT = 10
+# Wait max. 30s for connection stand up
+CONNECT_TIMEOUT = 30
 # 5min session timeout (no input received)
 SESSION_TIMEOUT = 300
 
@@ -61,8 +61,8 @@ def ip2host(peername):
     """
 
     # Remove interface from link-local ipv6 peernames
-    if ':' in peername[:5]:
-        peername, _ = peername.split('%')
+    if '%' in peername:
+        peername = peername.split('%')[0]
 
     try:
         return _hosts_dict[peername][0]
@@ -206,6 +206,15 @@ if __name__ == '__main__':
         parser.print_help()
         sys.exit(1)
 
+    # Override configuration
+    if args.maxconcurrent:
+        MAX_CONCURRENT = int(args.maxconcurrent)
+    if args.connecttimeout:
+        CONNECT_TIMEOUT = int(args.connecttimeout)
+    if args.sessiontimeout:
+        SESSION_TIMEOUT = int(args.sessiontimeout)
+
+
 
     # Bootstrap asyncio objects
     _host_queue = asyncio.Queue()
@@ -246,7 +255,7 @@ if __name__ == '__main__':
 
     # Place matched hosts into queue
     #for _ in range(200):
-    [_host_queue.put_nowait(host_tuple) for host_tuple in _hosts] # pylint: disable=expression-not-assigned
+    [_host_queue.put_nowait(sorted_host) for sorted_host in sorted(_hosts)] # pylint: disable=expression-not-assigned
     _host_count = _host_queue.qsize()
 
     try:
