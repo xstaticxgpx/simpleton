@@ -22,9 +22,10 @@ SESSION_TIMEOUT = 300
 # Usage
 
 ```
-$ ./simpleton.py 
-usage: simpleton.py [-h] [--hostsfile [path]] [-H host [host ...]]
-                    [-X host [host ...]] [-f [path]] [-o [path]]
+usage: simpleton.py [-h] [--maxconcurrent [int]] [--connecttimeout [int]]
+                    [--sessiontimeout [int]] [--hostsfile [path]]
+                    [-H host [host ...]] [-X host [host ...]] [-i [dev]]
+                    [-f [path]] [-o [path]]
                     [cmd [cmd ...]]
 
 Simple asynchronous host management using SSH
@@ -34,11 +35,19 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
+  --maxconcurrent [int], -p [int]
+                        Override maximum concurrent/parallel sessions
+  --connecttimeout [int], -c [int]
+                        Override connect timeout
+  --sessiontimeout [int], -t [int]
+                        Override session timeout
   --hostsfile [path]    Path to hosts file (default: /etc/hosts)
   -H host [host ...], --host host [host ...]
                         Complete or partial hostnames
   -X host [host ...], --exclude host [host ...]
                         Exclude complete or partial hostnames
+  -i [dev], --interface [dev]
+                        Utilize specific network interface
   -f [path], --file [path]
                         Command list file
   -o [path], --output [path]
