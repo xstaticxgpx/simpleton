@@ -23,3 +23,6 @@ parser.add_argument('-f', '--file', dest='cmdfile', metavar='path', nargs='?',
 
 parser.add_argument('-o', '--output', dest='output', metavar='path', nargs='?', default='./out.sh',
         help='Path to save output script (default: ./out.sh) Automatically overwritten.')
+
+parser.add_argument('-i', '--interface', dest='interface', metavar='dev', nargs='?', default=None,
+        help='Utilize specific network interface (default: None)')

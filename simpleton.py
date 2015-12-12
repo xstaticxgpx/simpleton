@@ -60,6 +60,10 @@ def ip2host(peername):
     Host dictionary lookup
     """
 
+    # Remove interface from link-local ipv6 peernames
+    if ':' in peername[:5]:
+        peername, _ = peername.split('%')
+
     try:
         return _hosts_dict[peername][0]
     except (KeyError, IndexError):
@@ -134,14 +138,20 @@ class SSHClientSession(asyncssh.SSHClientSession):
             self.error = str(e) if str(e) else "Timeout"
 
 @asyncio.coroutine
-def SSHClient(host, cmdlist):
+def SSHClient(host_tuple, cmdlist):
     """
     Perform SSH client logic
     """
 
+    host, ip = host_tuple
+    # Link-local IPv6 support
+    if ip.startswith('fe80'):
+        # Try to assume eth0 as the interface as a fallback
+        ip = ip+'%'+args.interface if args.interface else ip+"%eth0"
+
     try:
         # Wait at most CONNECT_TIMEOUT seconds for asyncssh.connect() to return
-        with (yield from wait_for(asyncssh.connect(host, **_SSH_OPTS), CONNECT_TIMEOUT)) as conn:
+        with (yield from wait_for(asyncssh.connect(ip, **_SSH_OPTS), CONNECT_TIMEOUT)) as conn:
             conn.usr = conn.get_extra_info("username")
             log.warning('[%s:%s] SSH connection initiated', host, conn.usr)
 
@@ -211,28 +221,32 @@ if __name__ == '__main__':
 
     # Host inclusion logic
     _hosts_dict = parse_hosts(args.hostsfile)
+    #_ip_dict = {v: k for (k, v) in _hosts_dict}
     _hosts = set()
     if args.hostmatch:
         for ip in _hosts_dict:
             for match in args.hostmatch:
-                [_hosts.add(hostname) for hostname in _hosts_dict[ip] if match in hostname] # pylint: disable=expression-not-assigned
+                [_hosts.add((host, ip)) for host in _hosts_dict[ip] if match in host] # pylint: disable=expression-not-assigned
 
     # Host exclusion logic
-    __hosts = list(_hosts)
+    __hosts = set()
     if args.hostexclude:
         for exclude in args.hostexclude:
-            [_hosts.remove(hostname) for hostname in __hosts if exclude in hostname] # pylint: disable=expression-not-assigned
+            [__hosts.add((host, ip)) for (host, ip) in _hosts if exclude in host] # pylint: disable=expression-not-assigned
+
+    # Bitwise XOR on inclusion/exclusion set() objects
+    _hosts = _hosts ^ __hosts
 
     if not _hosts:
         log.critical('No hosts matched')
         log_queue.stop()
         sys.exit(1)
     log.debug('Matched %d hosts like %s, unlike %s',
-              len(_hosts), args.hostmatch, args.hostexclude if args.hostexclude else "''")
+              len(_hosts), args.hostmatch, args.hostexclude or "''")
 
     # Place matched hosts into queue
     #for _ in range(200):
-    [_host_queue.put_nowait(hostname) for hostname in _hosts] # pylint: disable=expression-not-assigned
+    [_host_queue.put_nowait(host_tuple) for host_tuple in _hosts] # pylint: disable=expression-not-assigned
     _host_count = _host_queue.qsize()
 
     try:
