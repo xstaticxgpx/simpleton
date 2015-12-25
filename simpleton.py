@@ -49,8 +49,23 @@ def parse_hosts(path):
         hosts = hostsfile.readlines()
 
     # Parse out comments and blank lines, split on whitespace
-    hosts = [line.strip().split() for line in hosts if not line.startswith('#') and line.strip()]
+    hosts = [line.split() for line in hosts if not line.startswith('#') and line.strip()]
     log.debug('Parsed %d entries from %s', len(hosts), path)
+
+    # Duplicate logic
+    dups = 0
+    for line in hosts:
+        hosts.remove(line)
+        for dup_check in hosts:
+            if dup_check[1] == line[1]:
+                dup = True
+                break
+        if not dup:
+            hosts.append(line)
+        else:
+            dups += 1
+        dup = False
+    log.debug('Ignored %d duplicate hosts', dups)
 
     # Return dictionary of ip: [hostnames,..]
     return {line[0]: line[1:] for line in hosts}
@@ -161,7 +176,9 @@ def SSHClient(host_tuple, cmdlist):
                     # Initiate command execution
                     session = SSHClientSession
                     # Wait at most SESSION_TIMEOUT seconds for session to complete
-                    chan, session = yield from wait_for(conn.create_session(session, conn.cmd), SESSION_TIMEOUT)
+                    chan, session = yield from wait_for(
+                        conn.create_session(session, conn.cmd), SESSION_TIMEOUT)
+
                     yield from wait_for(chan.wait_closed(), SESSION_TIMEOUT)
 
                 except AIOTimeout:
@@ -232,20 +249,20 @@ if __name__ == '__main__':
     # Host inclusion logic
     _hosts_dict = parse_hosts(args.hostsfile)
     #_ip_dict = {v: k for (k, v) in _hosts_dict}
-    _hosts = set()
+    _inc_hosts = set()
     if args.hostmatch:
-        for ip in _hosts_dict:
+        for _ip in _hosts_dict:
             for match in args.hostmatch:
-                [_hosts.add((host, ip)) for host in _hosts_dict[ip] if match in host] # pylint: disable=expression-not-assigned
+                [_inc_hosts.add((host, _ip)) for host in _hosts_dict[_ip] if match in host] # pylint: disable=expression-not-assigned
 
     # Host exclusion logic
-    __hosts = set()
+    _exc_hosts = set()
     if args.hostexclude:
         for exclude in args.hostexclude:
-            [__hosts.add((host, ip)) for (host, ip) in _hosts if exclude in host] # pylint: disable=expression-not-assigned
+            [_exc_hosts.add((host, ip)) for (host, ip) in _inc_hosts if exclude in host] # pylint: disable=expression-not-assigned
 
     # Bitwise XOR on inclusion/exclusion set() objects
-    _hosts = _hosts ^ __hosts
+    _hosts = _inc_hosts ^ _exc_hosts
 
     if not _hosts:
         log.critical('No hosts matched')
@@ -276,7 +293,7 @@ if __name__ == '__main__':
         for _host_tuple in _hosts:
             _host = _host_tuple[0]
             if _host in sessionfailures or _host in connectfailures:
-                _fail_count+=1
+                _fail_count += 1
         log.info('Successfully ran on %d hosts in %.03fs', (_host_count-_fail_count), (_end-_start))
 
         if sessionfailures or connectfailures:
